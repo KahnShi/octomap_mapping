@@ -1,0 +1,8 @@
+<launch>
+  <!-- you can load an exisiting tree with <node ... args="tree.bt"> !-->
+  <node pkg="octomap_server" type="octomap_truck_server_node" name="octomap_talker" output="screen">
+    <param name="resolution" value="0.1" />
+    <param name="frame_id" type="string" value="world" />
+    <!--remap from="cloud_in" to="/rgbdslam/batch_clouds" /-->
+  </node>
+</launch>
