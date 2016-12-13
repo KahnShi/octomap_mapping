@@ -51,7 +51,8 @@ OctomapServer::OctomapServer(ros::NodeHandle private_nh_)
   m_useColoredMap(false),
   m_colorFactor(0.8),
   m_latchedTopics(true),
-  m_publishFreeSpace(false),
+  // We want to display free space for visualization.
+  m_publishFreeSpace(true),
   m_res(0.05),
   m_treeDepth(0),
   m_maxTreeDepth(0),
