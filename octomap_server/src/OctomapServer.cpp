@@ -146,22 +146,26 @@ OctomapServer::OctomapServer(ros::NodeHandle private_nh_)
   private_nh.param("color/b", b, 1.0);
   //private_nh.param("color/a", a, 1.0);
   // Shi alpha adjust
-  private_nh.param("color/a", a, 0.1);
+  private_nh.param("color/a", a, 0.2);
   m_color.r = r;
   m_color.g = g;
   m_color.b = b;
+  //Shi
   m_color.a = a;
+  m_color.a = 0.2;
 
   private_nh.param("color_free/r", r, 0.0);
   private_nh.param("color_free/g", g, 1.0);
   private_nh.param("color_free/b", b, 0.0);
   //private_nh.param("color_free/a", a, 1.0);
   // Shi alpha adjust
-  private_nh.param("color_free/a", a, 0.1);
+  private_nh.param("color_free/a", a, 0.2);
   m_colorFree.r = r;
   m_colorFree.g = g;
   m_colorFree.b = b;
-  m_colorFree.a = a;
+  //Shi
+  //m_colorFree.a = a;
+  m_colorFree.a = 0.2;
 
   private_nh.param("publish_free_space", m_publishFreeSpace, m_publishFreeSpace);
 
@@ -540,6 +544,8 @@ void OctomapServer::publishAll(const ros::Time& rostime){
         int r = it->getColor().r;
         int g = it->getColor().g;
         int b = it->getColor().b;
+        //Shi adjust aplha
+        int alpha = 0.2;
 #endif
 
         // Ignore speckles in the map:
@@ -575,7 +581,7 @@ void OctomapServer::publishAll(const ros::Time& rostime){
 
 #ifdef COLOR_OCTOMAP_SERVER
           if (m_useColoredMap) {
-            std_msgs::ColorRGBA _color; _color.r = (r / 255.); _color.g = (g / 255.); _color.b = (b / 255.); _color.a = 1.0; // TODO/EVALUATE: potentially use occupancy as measure for alpha channel?
+            std_msgs::ColorRGBA _color; _color.r = (r / 255.); _color.g = (g / 255.); _color.b = (b / 255.); _color.a = alpha; // TODO/EVALUATE: potentially use occupancy as measure for alpha channel?
             occupiedNodesVis.markers[idx].colors.push_back(_color);
           }
 #endif
