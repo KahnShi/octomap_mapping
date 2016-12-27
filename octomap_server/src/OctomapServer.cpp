@@ -52,8 +52,8 @@ OctomapServer::OctomapServer(ros::NodeHandle private_nh_)
   m_colorFactor(0.8),
   m_latchedTopics(true),
   // We want to display free space for visualization.
-  m_publishFreeSpace(true),
-  m_res(0.05),
+  m_publishFreeSpace(false),
+  m_res(0.1),
   m_treeDepth(0),
   m_maxTreeDepth(0),
   m_pointcloudMinX(-std::numeric_limits<double>::max()),
@@ -144,7 +144,9 @@ OctomapServer::OctomapServer(ros::NodeHandle private_nh_)
   private_nh.param("color/r", r, 0.0);
   private_nh.param("color/g", g, 0.0);
   private_nh.param("color/b", b, 1.0);
-  private_nh.param("color/a", a, 1.0);
+  //private_nh.param("color/a", a, 1.0);
+  // Shi alpha adjust
+  private_nh.param("color/a", a, 0.1);
   m_color.r = r;
   m_color.g = g;
   m_color.b = b;
@@ -153,7 +155,9 @@ OctomapServer::OctomapServer(ros::NodeHandle private_nh_)
   private_nh.param("color_free/r", r, 0.0);
   private_nh.param("color_free/g", g, 1.0);
   private_nh.param("color_free/b", b, 0.0);
-  private_nh.param("color_free/a", a, 1.0);
+  //private_nh.param("color_free/a", a, 1.0);
+  // Shi alpha adjust
+  private_nh.param("color_free/a", a, 0.1);
   m_colorFree.r = r;
   m_colorFree.g = g;
   m_colorFree.b = b;
