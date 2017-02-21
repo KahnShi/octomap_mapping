@@ -91,6 +91,7 @@ public:
   //Shi
   OctomapServer(ros::NodeHandle private_nh_ = ros::NodeHandle("~"));
   OctomapServer(double resolution, int tree_depth);
+  OctomapServer(double resolution, int tree_depth, bool is_publish_topic);
 
   virtual ~OctomapServer();
   virtual bool octomapBinarySrv(OctomapSrv::Request  &req, OctomapSrv::GetOctomap::Response &res);

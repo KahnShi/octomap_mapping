@@ -38,6 +38,334 @@ bool is_equal (double a, double b, double epsilon = 1.0e-7)
 }
 
 namespace octomap_server{
+  // Shi's 0222, add bool flag to decide whether to publish and advertise
+  //OctomapServer::OctomapServer(double resolution, int tree_depth)
+  OctomapServer::OctomapServer(double resolution, int tree_depth, bool is_publish_topic)
+    : //m_nh(),
+  //m_pointCloudSub(NULL),
+  //m_tfPointCloudSub(NULL),
+  // Shi unnecessary item
+  //m_reconfigureServer(m_config_mutex),
+  m_octree(NULL),
+  m_maxRange(-1.0),
+  m_worldFrameId("/map"), m_baseFrameId("base_footprint"),
+  m_useHeightMap(true),
+  m_useColoredMap(false),
+  m_colorFactor(0.8),
+  m_latchedTopics(true),
+  // We want to display free space for visualization.
+  m_publishFreeSpace(false),
+  //m_res(0.1),
+  //m_treeDepth(0),
+  // Shi
+  m_res(resolution),
+  m_treeDepth(tree_depth),
+
+  m_maxTreeDepth(0),
+  m_pointcloudMinX(-std::numeric_limits<double>::max()),
+  m_pointcloudMaxX(std::numeric_limits<double>::max()),
+  m_pointcloudMinY(-std::numeric_limits<double>::max()),
+  m_pointcloudMaxY(std::numeric_limits<double>::max()),
+  m_pointcloudMinZ(-std::numeric_limits<double>::max()),
+  m_pointcloudMaxZ(std::numeric_limits<double>::max()),
+  m_occupancyMinZ(-std::numeric_limits<double>::max()),
+  m_occupancyMaxZ(std::numeric_limits<double>::max()),
+  m_minSizeX(0.0), m_minSizeY(0.0),
+  m_filterSpeckles(false), m_filterGroundPlane(false),
+  m_groundFilterDistance(0.04), m_groundFilterAngle(0.15), m_groundFilterPlaneDistance(0.07),
+  m_compressMap(true),
+  m_incrementalUpdate(false),
+  m_initConfig(false)
+{
+  double probHit, probMiss, thresMin, thresMax;
+  // Shi
+  //ros::NodeHandle private_nh(private_nh_);
+  ros::NodeHandle private_nh("~");
+
+  probHit = 0.7;
+  probMiss = 0.4;
+  thresMin = 0.12;
+  thresMax = 0.97;
+
+  if (m_filterGroundPlane && (m_pointcloudMinZ > 0.0 || m_pointcloudMaxZ < 0.0)){
+    ROS_WARN_STREAM("You enabled ground filtering but incoming pointclouds will be pre-filtered in ["
+              <<m_pointcloudMinZ <<", "<< m_pointcloudMaxZ << "], excluding the ground level z=0. "
+              << "This will not work.");
+  }
+
+  if (m_useHeightMap && m_useColoredMap) {
+    ROS_WARN_STREAM("You enabled both height map and RGB color registration. This is contradictory. Defaulting to height map.");
+    m_useColoredMap = false;
+  }
+
+  if (m_useColoredMap) {
+#ifdef COLOR_OCTOMAP_SERVER
+    ROS_INFO_STREAM("Using RGB color registration (if information available)");
+#else
+    ROS_ERROR_STREAM("Colored map requested in launch file - node not running/compiled to support colors, please define COLOR_OCTOMAP_SERVER and recompile or launch the octomap_color_server node");
+#endif
+  }
+
+
+  // initialize octomap object & params
+  // Shi
+  //m_octree = new OcTreeT(m_res);
+  m_octree = new OcTreeT(m_res, m_treeDepth, (int)(pow(2, m_treeDepth-1)));
+
+  m_octree->setProbHit(probHit);
+  m_octree->setProbMiss(probMiss);
+  m_octree->setClampingThresMin(thresMin);
+  m_octree->setClampingThresMax(thresMax);
+  m_treeDepth = m_octree->getTreeDepth();
+  m_maxTreeDepth = m_treeDepth;
+  m_gridmap.info.resolution = m_res;
+
+  double r, g, b, a;
+  r = 0.0;
+  g = 0.0;
+  b = 1.0;
+  //private_nh.param("color/a", a, 1.0);
+  // Shi alpha adjust
+  a = 0.2;
+  m_color.r = r;
+  m_color.g = g;
+  m_color.b = b;
+  //Shi
+  m_color.a = a;
+  m_color.a = 0.2;
+
+  r = 0.0;
+  g = 1.0;
+  b = 0.0;
+  //private_nh.param("color_free/a", a, 1.0);
+  // Shi alpha adjust
+  a = 0.2;
+  m_colorFree.r = r;
+  m_colorFree.g = g;
+  m_colorFree.b = b;
+  //Shi
+  //m_colorFree.a = a;
+  m_colorFree.a = 0.2;
+
+  // Shi remove unnecessary output
+  // if (m_latchedTopics){
+  //   ROS_INFO("Publishing latched (single publish will take longer, all topics are prepared)");
+  // } else
+  //   ROS_INFO("Publishing non-latched (topics are only prepared as needed, will only be re-published on map change");
+
+  // Shi Based on flag, deciding to publish/advertise or not
+  // if (is_publish_topic){
+  //   m_markerPub = m_nh.advertise<visualization_msgs::MarkerArray>("occupied_cells_vis_array", 1, m_latchedTopics);
+  //   m_binaryMapPub = m_nh.advertise<Octomap>("octomap_binary", 1, m_latchedTopics);
+  //   m_fullMapPub = m_nh.advertise<Octomap>("octomap_full", 1, m_latchedTopics);
+  //   m_pointCloudPub = m_nh.advertise<sensor_msgs::PointCloud2>("octomap_point_cloud_centers", 1, m_latchedTopics);
+  //   m_mapPub = m_nh.advertise<nav_msgs::OccupancyGrid>("projected_map", 5, m_latchedTopics);
+  //   m_fmarkerPub = m_nh.advertise<visualization_msgs::MarkerArray>("free_cells_vis_array", 1, m_latchedTopics);
+
+  //   m_pointCloudSub = new message_filters::Subscriber<sensor_msgs::PointCloud2> (m_nh, "cloud_in", 5);
+  //   m_tfPointCloudSub = new tf::MessageFilter<sensor_msgs::PointCloud2> (*m_pointCloudSub, m_tfListener, m_worldFrameId, 5);
+  //   m_tfPointCloudSub->registerCallback(boost::bind(&OctomapServer::insertCloudCallback, this, _1));
+
+  //   m_octomapBinaryService = m_nh.advertiseService("octomap_binary", &OctomapServer::octomapBinarySrv, this);
+  //   m_octomapFullService = m_nh.advertiseService("octomap_full", &OctomapServer::octomapFullSrv, this);
+  //   m_clearBBXService = private_nh.advertiseService("clear_bbx", &OctomapServer::clearBBXSrv, this);
+  //   m_resetService = private_nh.advertiseService("reset", &OctomapServer::resetSrv, this);
+  // }
+
+  // Shi
+  // it will reset m_maxTreeDepth to 16.
+  // dynamic_reconfigure::Server<OctomapServerConfig>::CallbackType f;
+  // f = boost::bind(&OctomapServer::reconfigureCallback, this, _1, _2);
+  // m_reconfigureServer.setCallback(f);
+}
+
+
+
+
+
+
+
+// // Shi's 0222, add bool flag to decide whether to publish and advertise
+//   //OctomapServer::OctomapServer(double resolution, int tree_depth)
+//   OctomapServer::OctomapServer(double resolution, int tree_depth, bool is_publish_topic)
+// : m_nh(),
+//   m_pointCloudSub(NULL),
+//   m_tfPointCloudSub(NULL),
+//   m_reconfigureServer(m_config_mutex),
+//   m_octree(NULL),
+//   m_maxRange(-1.0),
+//   m_worldFrameId("/map"), m_baseFrameId("base_footprint"),
+//   m_useHeightMap(true),
+//   m_useColoredMap(false),
+//   m_colorFactor(0.8),
+//   m_latchedTopics(true),
+//   // We want to display free space for visualization.
+//   m_publishFreeSpace(false),
+//   //m_res(0.1),
+//   //m_treeDepth(0),
+//   // Shi
+//   m_res(resolution),
+//   m_treeDepth(tree_depth),
+
+//   m_maxTreeDepth(0),
+//   m_pointcloudMinX(-std::numeric_limits<double>::max()),
+//   m_pointcloudMaxX(std::numeric_limits<double>::max()),
+//   m_pointcloudMinY(-std::numeric_limits<double>::max()),
+//   m_pointcloudMaxY(std::numeric_limits<double>::max()),
+//   m_pointcloudMinZ(-std::numeric_limits<double>::max()),
+//   m_pointcloudMaxZ(std::numeric_limits<double>::max()),
+//   m_occupancyMinZ(-std::numeric_limits<double>::max()),
+//   m_occupancyMaxZ(std::numeric_limits<double>::max()),
+//   m_minSizeX(0.0), m_minSizeY(0.0),
+//   m_filterSpeckles(false), m_filterGroundPlane(false),
+//   m_groundFilterDistance(0.04), m_groundFilterAngle(0.15), m_groundFilterPlaneDistance(0.07),
+//   m_compressMap(true),
+//   m_incrementalUpdate(false),
+//   m_initConfig(true)
+// {
+//   double probHit, probMiss, thresMin, thresMax;
+
+//   // Shi
+//   //ros::NodeHandle private_nh(private_nh_);
+//   ros::NodeHandle private_nh("~");
+
+//   private_nh.param("frame_id", m_worldFrameId, m_worldFrameId);
+//   private_nh.param("base_frame_id", m_baseFrameId, m_baseFrameId);
+//   private_nh.param("height_map", m_useHeightMap, m_useHeightMap);
+//   private_nh.param("colored_map", m_useColoredMap, m_useColoredMap);
+//   private_nh.param("color_factor", m_colorFactor, m_colorFactor);
+
+//   private_nh.param("pointcloud_min_x", m_pointcloudMinX,m_pointcloudMinX);
+//   private_nh.param("pointcloud_max_x", m_pointcloudMaxX,m_pointcloudMaxX);
+//   private_nh.param("pointcloud_min_y", m_pointcloudMinY,m_pointcloudMinY);
+//   private_nh.param("pointcloud_max_y", m_pointcloudMaxY,m_pointcloudMaxY);
+//   private_nh.param("pointcloud_min_z", m_pointcloudMinZ,m_pointcloudMinZ);
+//   private_nh.param("pointcloud_max_z", m_pointcloudMaxZ,m_pointcloudMaxZ);
+//   private_nh.param("occupancy_min_z", m_occupancyMinZ,m_occupancyMinZ);
+//   private_nh.param("occupancy_max_z", m_occupancyMaxZ,m_occupancyMaxZ);
+//   private_nh.param("min_x_size", m_minSizeX,m_minSizeX);
+//   private_nh.param("min_y_size", m_minSizeY,m_minSizeY);
+
+//   private_nh.param("filter_speckles", m_filterSpeckles, m_filterSpeckles);
+//   private_nh.param("filter_ground", m_filterGroundPlane, m_filterGroundPlane);
+//   // distance of points from plane for RANSAC
+//   private_nh.param("ground_filter/distance", m_groundFilterDistance, m_groundFilterDistance);
+//   // angular derivation of found plane:
+//   private_nh.param("ground_filter/angle", m_groundFilterAngle, m_groundFilterAngle);
+//   // distance of found plane from z=0 to be detected as ground (e.g. to exclude tables)
+//   private_nh.param("ground_filter/plane_distance", m_groundFilterPlaneDistance, m_groundFilterPlaneDistance);
+
+//   private_nh.param("sensor_model/max_range", m_maxRange, m_maxRange);
+
+//   private_nh.param("resolution", m_res, m_res);
+//   private_nh.param("sensor_model/hit", probHit, 0.7);
+//   private_nh.param("sensor_model/miss", probMiss, 0.4);
+//   private_nh.param("sensor_model/min", thresMin, 0.12);
+//   private_nh.param("sensor_model/max", thresMax, 0.97);
+//   private_nh.param("compress_map", m_compressMap, m_compressMap);
+//   private_nh.param("incremental_2D_projection", m_incrementalUpdate, m_incrementalUpdate);
+
+//   if (m_filterGroundPlane && (m_pointcloudMinZ > 0.0 || m_pointcloudMaxZ < 0.0)){
+//     ROS_WARN_STREAM("You enabled ground filtering but incoming pointclouds will be pre-filtered in ["
+//               <<m_pointcloudMinZ <<", "<< m_pointcloudMaxZ << "], excluding the ground level z=0. "
+//               << "This will not work.");
+//   }
+
+//   if (m_useHeightMap && m_useColoredMap) {
+//     ROS_WARN_STREAM("You enabled both height map and RGB color registration. This is contradictory. Defaulting to height map.");
+//     m_useColoredMap = false;
+//   }
+
+//   if (m_useColoredMap) {
+// #ifdef COLOR_OCTOMAP_SERVER
+//     ROS_INFO_STREAM("Using RGB color registration (if information available)");
+// #else
+//     ROS_ERROR_STREAM("Colored map requested in launch file - node not running/compiled to support colors, please define COLOR_OCTOMAP_SERVER and recompile or launch the octomap_color_server node");
+// #endif
+//   }
+
+
+//   // initialize octomap object & params
+//   // Shi
+//   //m_octree = new OcTreeT(m_res);
+//   m_octree = new OcTreeT(m_res, m_treeDepth, (int)(pow(2, m_treeDepth-1)));
+
+//   m_octree->setProbHit(probHit);
+//   m_octree->setProbMiss(probMiss);
+//   m_octree->setClampingThresMin(thresMin);
+//   m_octree->setClampingThresMax(thresMax);
+//   m_treeDepth = m_octree->getTreeDepth();
+//   m_maxTreeDepth = m_treeDepth;
+//   m_gridmap.info.resolution = m_res;
+
+//   double r, g, b, a;
+//   private_nh.param("color/r", r, 0.0);
+//   private_nh.param("color/g", g, 0.0);
+//   private_nh.param("color/b", b, 1.0);
+//   //private_nh.param("color/a", a, 1.0);
+//   // Shi alpha adjust
+//   private_nh.param("color/a", a, 0.2);
+//   m_color.r = r;
+//   m_color.g = g;
+//   m_color.b = b;
+//   //Shi
+//   m_color.a = a;
+//   m_color.a = 0.2;
+
+//   private_nh.param("color_free/r", r, 0.0);
+//   private_nh.param("color_free/g", g, 1.0);
+//   private_nh.param("color_free/b", b, 0.0);
+//   //private_nh.param("color_free/a", a, 1.0);
+//   // Shi alpha adjust
+//   private_nh.param("color_free/a", a, 0.2);
+//   m_colorFree.r = r;
+//   m_colorFree.g = g;
+//   m_colorFree.b = b;
+//   //Shi
+//   //m_colorFree.a = a;
+//   m_colorFree.a = 0.2;
+
+//   private_nh.param("publish_free_space", m_publishFreeSpace, m_publishFreeSpace);
+
+//   private_nh.param("latch", m_latchedTopics, m_latchedTopics);
+//   if (m_latchedTopics){
+//     ROS_INFO("Publishing latched (single publish will take longer, all topics are prepared)");
+//   } else
+//     ROS_INFO("Publishing non-latched (topics are only prepared as needed, will only be re-published on map change");
+
+//   // Shi Based on flag, deciding to publish/advertise or not
+//   if (is_publish_topic){
+//     m_markerPub = m_nh.advertise<visualization_msgs::MarkerArray>("occupied_cells_vis_array", 1, m_latchedTopics);
+//     m_binaryMapPub = m_nh.advertise<Octomap>("octomap_binary", 1, m_latchedTopics);
+//     m_fullMapPub = m_nh.advertise<Octomap>("octomap_full", 1, m_latchedTopics);
+//     m_pointCloudPub = m_nh.advertise<sensor_msgs::PointCloud2>("octomap_point_cloud_centers", 1, m_latchedTopics);
+//     m_mapPub = m_nh.advertise<nav_msgs::OccupancyGrid>("projected_map", 5, m_latchedTopics);
+//     m_fmarkerPub = m_nh.advertise<visualization_msgs::MarkerArray>("free_cells_vis_array", 1, m_latchedTopics);
+
+//     m_pointCloudSub = new message_filters::Subscriber<sensor_msgs::PointCloud2> (m_nh, "cloud_in", 5);
+//     m_tfPointCloudSub = new tf::MessageFilter<sensor_msgs::PointCloud2> (*m_pointCloudSub, m_tfListener, m_worldFrameId, 5);
+//     m_tfPointCloudSub->registerCallback(boost::bind(&OctomapServer::insertCloudCallback, this, _1));
+
+//     m_octomapBinaryService = m_nh.advertiseService("octomap_binary", &OctomapServer::octomapBinarySrv, this);
+//     m_octomapFullService = m_nh.advertiseService("octomap_full", &OctomapServer::octomapFullSrv, this);
+//     m_clearBBXService = private_nh.advertiseService("clear_bbx", &OctomapServer::clearBBXSrv, this);
+//     m_resetService = private_nh.advertiseService("reset", &OctomapServer::resetSrv, this);
+//   }
+
+//   // Shi
+//   // it will reset m_maxTreeDepth to 16.
+//   // dynamic_reconfigure::Server<OctomapServerConfig>::CallbackType f;
+//   // f = boost::bind(&OctomapServer::reconfigureCallback, this, _1, _2);
+//   // m_reconfigureServer.setCallback(f);
+// }
+
+
+
+
+
+
+
+
   // Shi's 0212
   //OctomapServer::OctomapServer(ros::NodeHandle private_nh_)
   OctomapServer::OctomapServer(double resolution, int tree_depth)
@@ -181,10 +509,12 @@ namespace octomap_server{
   private_nh.param("publish_free_space", m_publishFreeSpace, m_publishFreeSpace);
 
   private_nh.param("latch", m_latchedTopics, m_latchedTopics);
-  if (m_latchedTopics){
-    ROS_INFO("Publishing latched (single publish will take longer, all topics are prepared)");
-  } else
-    ROS_INFO("Publishing non-latched (topics are only prepared as needed, will only be re-published on map change");
+
+  // Shi remove unnecessary output
+  // if (m_latchedTopics){
+  //   ROS_INFO("Publishing latched (single publish will take longer, all topics are prepared)");
+  // } else
+  //   ROS_INFO("Publishing non-latched (topics are only prepared as needed, will only be re-published on map change");
 
   m_markerPub = m_nh.advertise<visualization_msgs::MarkerArray>("occupied_cells_vis_array", 1, m_latchedTopics);
   m_binaryMapPub = m_nh.advertise<Octomap>("octomap_binary", 1, m_latchedTopics);
